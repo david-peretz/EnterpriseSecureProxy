@@ -1,0 +1,60 @@
+@host = http://localhost:5080
+@adminKey = dev-admin-key-change-me
+
+### Health
+GET {{host}}/health
+
+### Forward a configured GET operation (demo seed: echo.get -> https://httpbin.org/anything/{resourceId})
+POST {{host}}/api/proxy/execute
+Content-Type: application/json
+X-Correlation-ID: demo-0001
+X-Tenant-Id: tenant-42
+
+{
+  "clientId": "echo.get",
+  "json": { "urlId": "httpbin", "resourceId": "abc-123", "verbose": true }
+}
+
+### Forward a configured POST operation with body parameters
+POST {{host}}/api/proxy/execute
+Content-Type: application/json
+
+{
+  "clientId": "echo.post",
+  "idempotencyKey": "order-7781",
+  "json": { "urlId": "httpbin", "customerId": "0f8fad5b-d9cb-469f-a165-70867728950e", "amount": 99.5, "note": "first order" }
+}
+
+### Rejected: unknown operation (404, never forwarded)
+POST {{host}}/api/proxy/execute
+Content-Type: application/json
+
+{ "clientId": "does.not.exist", "json": { "urlId": "httpbin" } }
+
+### Rejected: caller tries to override the destination (400 envelope.unknown_member)
+POST {{host}}/api/proxy/execute
+Content-Type: application/json
+
+{ "clientId": "echo.get", "destinationUrl": "https://evil.example/", "json": { "urlId": "httpbin", "resourceId": "x" } }
+
+### Rejected: path traversal attempt (400 parameters.invalid)
+POST {{host}}/api/proxy/execute
+Content-Type: application/json
+
+{ "clientId": "echo.get", "json": { "urlId": "httpbin", "resourceId": "../admin" } }
+
+### Admin: list operations
+GET {{host}}/api/admin/operations
+X-Admin-ApiKey: {{adminKey}}
+
+### Admin: disable an operation (replace the stamp with the ETag from the GET above)
+PUT {{host}}/api/admin/operations/echo.get
+Content-Type: application/json
+X-Admin-ApiKey: {{adminKey}}
+If-Match: "REPLACE_WITH_CURRENT_STAMP"
+
+{ "isEnabled": false }
+
+### Admin: configuration history
+GET {{host}}/api/admin/configuration-changes?entityType=Operation&take=20
+X-Admin-ApiKey: {{adminKey}}
